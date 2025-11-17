@@ -1,71 +1,71 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 
-const hubs = [
-  {
-    id: 'saopaulo',
-    name: 'São Paulo',
-    country: 'Brasil',
-    pos: { x: 0.36, y: 0.72 },
-    volume24h: 18_500_000,
-    pairs: ['USDT ⇄ BRL'],
-    latencyMs: 95,
-    status: 'Online',
-  },
-  {
-    id: 'newyork',
-    name: 'New York',
-    country: 'EUA',
-    pos: { x: 0.30, y: 0.42 },
-    volume24h: 12_900_000,
-    pairs: ['USDT ⇄ USD'],
-    latencyMs: 120,
-    status: 'Online',
-  },
-  {
-    id: 'lisbon',
-    name: 'Lisboa',
-    country: 'Portugal',
-    pos: { x: 0.50, y: 0.43 },
-    volume24h: 6_300_000,
-    pairs: ['USDT ⇄ EUR'],
-    latencyMs: 150,
-    status: 'Janela Europeia',
-  },
-  {
-    id: 'dubai',
-    name: 'Dubai',
-    country: 'EAU',
-    pos: { x: 0.63, y: 0.50 },
-    volume24h: 9_800_000,
-    pairs: ['USDT ⇄ AED'],
-    latencyMs: 170,
-    status: 'Online',
-  },
-  {
-    id: 'singapore',
-    name: 'Singapura',
-    country: 'Singapura',
-    pos: { x: 0.78, y: 0.66 },
-    volume24h: 7_400_000,
-    pairs: ['USDT ⇄ SGD'],
-    latencyMs: 210,
-    status: 'APAC',
-  },
+// Static geometry + identity
+const GEO_HUBS = [
+  { id: 'saopaulo', name: 'São Paulo', country: 'Brasil', pos: { x: 0.36, y: 0.72 }, pairs: ['USDT ⇄ BRL'] },
+  { id: 'newyork', name: 'New York', country: 'EUA', pos: { x: 0.30, y: 0.42 }, pairs: ['USDT ⇄ USD'] },
+  { id: 'lisbon', name: 'Lisboa', country: 'Portugal', pos: { x: 0.50, y: 0.43 }, pairs: ['USDT ⇄ EUR'] },
+  { id: 'dubai', name: 'Dubai', country: 'EAU', pos: { x: 0.63, y: 0.50 }, pairs: ['USDT ⇄ AED'] },
+  { id: 'singapore', name: 'Singapura', country: 'Singapura', pos: { x: 0.78, y: 0.66 }, pairs: ['USDT ⇄ SGD'] },
 ]
 
 function formatBRL(n) {
+  if (n == null) return '—'
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(n)
 }
 
 export default function NetworkMap() {
-  const [active, setActive] = useState(null)
+  const [hubs, setHubs] = useState(
+    GEO_HUBS.map((h) => ({ ...h, volume24h: null, latencyMs: null, status: '—' }))
+  )
+  const [activeId, setActiveId] = useState(null)
 
+  // Build arc connections São Paulo -> others
   const lines = useMemo(() => {
-    // Create arcs between São Paulo and other hubs
-    const sp = hubs[0]
-    return hubs.slice(1).map((h) => ({ from: sp, to: h }))
+    const sp = GEO_HUBS[0]
+    return GEO_HUBS.slice(1).map((h) => ({ from: sp, to: h }))
   }, [])
+
+  // Fetch dynamic metrics from backend and merge by id
+  useEffect(() => {
+    const base = import.meta.env.VITE_BACKEND_URL
+    let mounted = true
+
+    const mergeMetrics = (payload) => {
+      if (!payload?.hubs) return
+      const next = GEO_HUBS.map((geo) => {
+        const snap = payload.hubs.find((x) => x.id === geo.id)
+        return {
+          ...geo,
+          volume24h: snap?.volume24h ?? null,
+          latencyMs: snap?.latencyMs ?? null,
+          status: snap?.status ?? '—',
+        }
+      })
+      if (mounted) setHubs(next)
+    }
+
+    const load = async () => {
+      if (!base) return
+      try {
+        const res = await fetch(`${base}/hubs`)
+        const json = await res.json()
+        mergeMetrics(json)
+      } catch {
+        // keep existing values as graceful fallback
+      }
+    }
+
+    load()
+    const id = setInterval(load, 25000)
+    return () => {
+      mounted = false
+      clearInterval(id)
+    }
+  }, [])
+
+  const active = useMemo(() => hubs.find((h) => h.id === activeId) || null, [hubs, activeId])
 
   return (
     <section className="relative z-10 bg-black py-16 text-white">
@@ -77,9 +77,10 @@ export default function NetworkMap() {
         </div>
 
         <div className="relative mx-auto aspect-[16/9] w-full overflow-hidden rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))]">
-          {/* map grid */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(255,85,0,0.08),transparent_40%)]" />
-          <svg viewBox="0 0 1000 562" className="h-full w-full">
+          {/* map grid overlay */}
+          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_120%,rgba(255,85,0,0.08),transparent_40%)]" />
+
+          <svg viewBox="0 0 1000 562" className="h-full w-full" style={{ touchAction: 'manipulation' }}>
             {/* Subtle graticule */}
             {[...Array(12)].map((_, i) => (
               <line key={`v${i}`} x1={(i + 1) * (1000 / 13)} y1={0} x2={(i + 1) * (1000 / 13)} y2={562} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
@@ -95,10 +96,10 @@ export default function NetworkMap() {
               const x2 = to.pos.x * 1000
               const y2 = to.pos.y * 562
               const cx = (x1 + x2) / 2
-              const cy = Math.min(y1, y2) - 80 // raise control point
+              const cy = Math.min(y1, y2) - 80
               const path = `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`
               return (
-                <g key={idx}>
+                <g key={idx} pointerEvents="none">
                   <path d={path} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={1} />
                   <motion.circle r={3} fill="#FF7733">
                     <animateMotion dur={`${6 + idx}s`} repeatCount="indefinite" path={path} />
@@ -113,17 +114,26 @@ export default function NetworkMap() {
               const x = h.pos.x * 1000
               const y = h.pos.y * 562
               const isActive = active?.id === h.id
+              const onSelect = () => setActiveId(h.id)
               return (
-                <g key={h.id} onClick={() => setActive(h)} className="cursor-pointer">
-                  <circle cx={x} cy={y} r={6} fill="#FF5500" />
-                  <circle cx={x} cy={y} r={14} fill="url(#glow)" opacity={0.28} />
-                  <text x={x + 10} y={y - 10} fill="white" opacity={0.9} fontSize={12}>
+                <g
+                  key={h.id}
+                  onClick={onSelect}
+                  onPointerDown={onSelect}
+                  className="cursor-pointer"
+                  style={{ pointerEvents: 'all' }}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <circle cx={x} cy={y} r={10} fill="#FF5500" opacity={0.95} />
+                  <circle cx={x} cy={y} r={18} fill="url(#glow)" opacity={0.35} />
+                  <text x={x + 12} y={y - 10} fill="white" opacity={0.9} fontSize={12} style={{ pointerEvents: 'none' }}>
                     {h.name}
                   </text>
                   {isActive && (
                     <>
-                      <circle cx={x} cy={y} r={20} fill="none" stroke="rgba(255,85,0,0.6)" strokeWidth={1} />
-                      <circle cx={x} cy={y} r={28} fill="none" stroke="rgba(255,85,0,0.3)" strokeWidth={1} />
+                      <circle cx={x} cy={y} r={24} fill="none" stroke="rgba(255,85,0,0.7)" strokeWidth={1} />
+                      <circle cx={x} cy={y} r={32} fill="none" stroke="rgba(255,85,0,0.35)" strokeWidth={1} />
                     </>
                   )}
                 </g>
@@ -132,7 +142,7 @@ export default function NetworkMap() {
 
             <defs>
               <radialGradient id="glow">
-                <stop offset="0%" stopColor="rgba(255,85,0,0.5)" />
+                <stop offset="0%" stopColor="rgba(255,85,0,0.6)" />
                 <stop offset="100%" stopColor="rgba(255,85,0,0)" />
               </radialGradient>
             </defs>
@@ -154,7 +164,7 @@ export default function NetworkMap() {
                     <p className="text-xs text-white/60">{active.country}</p>
                   </div>
                   <button
-                    onClick={() => setActive(null)}
+                    onClick={() => setActiveId(null)}
                     className="rounded-lg border border-white/10 px-2 py-1 text-xs text-white/70 hover:text-white hover:bg-white/5"
                   >
                     Fechar
@@ -167,7 +177,7 @@ export default function NetworkMap() {
                   </div>
                   <div className="rounded-xl border border-white/10 bg-white/5 p-3">
                     <div className="text-xs text-white/60">Latência</div>
-                    <div className="text-white">{active.latencyMs} ms</div>
+                    <div className="text-white">{active.latencyMs != null ? `${active.latencyMs} ms` : '—'}</div>
                   </div>
                   <div className="col-span-2 rounded-xl border border-white/10 bg-white/5 p-3">
                     <div className="text-xs text-white/60">Pares</div>
@@ -178,6 +188,10 @@ export default function NetworkMap() {
                         </span>
                       ))}
                     </div>
+                  </div>
+                  <div className="col-span-2 rounded-xl border border-white/10 bg-white/5 p-3">
+                    <div className="text-xs text-white/60">Status</div>
+                    <div className="mt-1 text-white">{active.status}</div>
                   </div>
                 </div>
               </motion.div>
