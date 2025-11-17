@@ -5,19 +5,19 @@ export default function Navbar() {
   const [open, setOpen] = useState(false)
 
   const navItems = [
-    { label: 'Products', href: '#features' },
-    { label: 'How it works', href: '#how' },
-    { label: 'Rates', href: '#rates' },
-    { label: 'Contact', href: '#contact' },
+    { label: 'Produtos', href: '#features' },
+    { label: 'Como funciona', href: '#how' },
+    { label: 'Cotações', href: '#rates' },
+    { label: 'Contato', href: '#contact' },
   ]
 
   return (
     <header className="fixed top-0 left-0 right-0 z-50">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 backdrop-blur supports-[backdrop-filter]:bg-white/5">
+        <div className="mt-4 rounded-2xl border border-white/10 bg-black/60 backdrop-blur supports-[backdrop-filter]:bg-black/60 shadow-[0_0_0_1px_rgba(255,85,0,0.08)]">
           <div className="flex items-center justify-between px-4 py-3 sm:px-6">
             <a href="#" className="flex items-center gap-2">
-              <div className="grid place-items-center h-10 w-10 rounded-xl bg-gradient-to-tr from-cyan-400 via-emerald-400 to-blue-500 text-black">
+              <div className="grid place-items-center h-10 w-10 rounded-xl bg-gradient-to-tr from-[#FF5500] to-[#FF7733] text-black shadow-[0_8px_30px_rgba(255,85,0,0.35)]">
                 <Coins className="h-5 w-5" />
               </div>
               <div className="text-white font-semibold tracking-tight">TCR Finance</div>
@@ -32,11 +32,11 @@ export default function Navbar() {
             </nav>
 
             <div className="hidden md:flex items-center gap-3">
-              <a href="tel:+5511999999999" className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm text-white hover:bg-white/15 transition">
-                <Phone className="h-4 w-4" /> Call
+              <a href="tel:+5511999999999" className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white hover:bg-white/10 transition">
+                <Phone className="h-4 w-4" /> Ligar
               </a>
-              <a href="#contact" className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-400 via-emerald-400 to-blue-500 px-3 py-2 text-sm font-semibold text-black shadow-lg shadow-cyan-500/20 hover:scale-[1.01] active:scale-[0.99] transition-transform">
-                <Mail className="h-4 w-4" /> Get started
+              <a href="#contact" className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#FF5500] to-[#FF7733] px-3 py-2 text-sm font-semibold text-black shadow-[0_12px_40px_rgba(255,85,0,0.35)] hover:scale-[1.01] active:scale-[0.99] transition-transform">
+                <Mail className="h-4 w-4" /> Começar
               </a>
             </div>
 
@@ -53,8 +53,8 @@ export default function Navbar() {
                 </a>
               ))}
               <div className="flex gap-2 pt-2">
-                <a href="tel:+5511999999999" className="flex-1 text-center rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-white">Call</a>
-                <a href="#contact" className="flex-1 text-center rounded-lg bg-gradient-to-r from-cyan-400 via-emerald-400 to-blue-500 px-3 py-2 font-semibold text-black">Get started</a>
+                <a href="tel:+5511999999999" className="flex-1 text-center rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white">Ligar</a>
+                <a href="#contact" className="flex-1 text-center rounded-lg bg-gradient-to-r from-[#FF5500] to-[#FF7733] px-3 py-2 font-semibold text-black shadow-[0_12px_40px_rgba(255,85,0,0.35)]">Começar</a>
               </div>
             </div>
           )}
