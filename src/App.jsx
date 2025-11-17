@@ -4,11 +4,13 @@ import Features from './components/Features'
 import Rates from './components/Rates'
 import HowItWorks from './components/HowItWorks'
 import CTA from './components/CTA'
+import Ticker from './components/Ticker'
 
 function App() {
   return (
     <div className="min-h-screen bg-black text-white">
       <Navbar />
+      <Ticker />
       <main>
         <Hero />
         <Features />
