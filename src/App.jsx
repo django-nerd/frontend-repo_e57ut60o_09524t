@@ -5,6 +5,7 @@ import Rates from './components/Rates'
 import HowItWorks from './components/HowItWorks'
 import CTA from './components/CTA'
 import Ticker from './components/Ticker'
+import NetworkMap from './components/NetworkMap'
 
 function App() {
   return (
@@ -14,6 +15,7 @@ function App() {
       <main>
         <Hero />
         <Features />
+        <NetworkMap />
         <Rates />
         <HowItWorks />
         <CTA />
