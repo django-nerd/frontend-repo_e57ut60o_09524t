@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, forwardRef, useImperativeHandle } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Canvas, useFrame } from '@react-three/fiber'
-import { OrbitControls } from '@react-three/drei'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
+import { OrbitControls, useTexture } from '@react-three/drei'
+import * as THREE from 'three'
 
 // Static geometry + identity + lat/lon for 3D globe
 const GEO_HUBS = [
@@ -42,39 +43,175 @@ function GlowPoint({ position, strength = 1 }) {
   )
 }
 
-function Globe3D({ hubs, onSelect }) {
+function HubPulse({ position, intensity = 1 }) {
+  // Expanding rings that fade out, staggered
+  const rings = new Array(3).fill(0)
+  return (
+    <group position={position}>
+      {rings.map((_, i) => (
+        <PulsingRing key={i} delay={i * 0.8} intensity={intensity} />
+      ))}
+    </group>
+  )
+}
+
+function PulsingRing({ delay = 0, intensity = 1 }) {
+  const ref = useRef()
+  const startTime = useRef(null)
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime()
+    if (startTime.current == null) startTime.current = t + delay
+    const local = (t - startTime.current) % 2.4 // cycle
+    const k = local / 2.4
+    const s = 0.3 + k * 2.0
+    const o = 0.35 * (1 - k) * (0.5 + intensity * 0.5)
+    if (ref.current) {
+      ref.current.scale.setScalar(s)
+      ref.current.material.opacity = o
+    }
+  })
+  return (
+    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]}>
+      <ringGeometry args={[0.01, 0.06, 48]} />
+      <meshBasicMaterial color={'#FF7733'} transparent opacity={0.25} />
+    </mesh>
+  )
+}
+
+function ArcTube({ from, to, strength = 1 }) {
+  // Create a curved path elevated above the sphere
+  const curve = useMemo(() => {
+    const a = new THREE.Vector3(...from)
+    const b = new THREE.Vector3(...to)
+    const mid = a.clone().add(b).multiplyScalar(0.5).normalize().multiplyScalar(1.25) // elevated midpoint
+    const control1 = a.clone().normalize().multiplyScalar(1.1)
+    const control2 = b.clone().normalize().multiplyScalar(1.1)
+    return new THREE.CatmullRomCurve3([a, control1, mid, control2, b])
+  }, [from, to])
+
+  const tubeGeom = useMemo(() => new THREE.TubeGeometry(curve, 120, 0.003 + 0.006 * strength, 8, false), [curve, strength])
+
+  return (
+    <group>
+      <mesh geometry={tubeGeom}>
+        <meshBasicMaterial color={'#FF7733'} transparent opacity={0.28} />
+      </mesh>
+      <ArcParticle curve={curve} strength={strength} />
+    </group>
+  )
+}
+
+function ArcParticle({ curve, strength = 1 }) {
+  const ref = useRef()
+  useFrame(({ clock }) => {
+    const t = (clock.getElapsedTime() * (0.08 + strength * 0.12)) % 1
+    const p = curve.getPointAt(t)
+    if (ref.current) ref.current.position.copy(p)
+  })
+  return (
+    <mesh ref={ref}>
+      <sphereGeometry args={[0.015 + 0.02 * strength, 16, 16]} />
+      <meshBasicMaterial color={'#FF7733'} />
+    </mesh>
+  )
+}
+
+const Globe3D = forwardRef(function Globe3D({ hubs, onSelect }, ref) {
+  const earthMap = useTexture('https://raw.githubusercontent.com/pmndrs/drei-assets/master/textures/earth-dark.jpg')
+  const { camera } = useThree()
+  const controlsRef = useRef()
+
+  // Expose focusBrazil method
+  useImperativeHandle(ref, () => ({
+    focusBrazil: () => {
+      const [x, y, z] = latLonToXYZ(-14.235, -51.9253, 1.01) // Brazil center-ish
+      const target = new THREE.Vector3(x, y, z)
+      const dir = target.clone().normalize()
+      const dist = 2.0
+      const dest = dir.multiplyScalar(dist)
+
+      // Smooth animation
+      const start = {
+        px: camera.position.x, py: camera.position.y, pz: camera.position.z,
+        tx: controlsRef.current.target.x, ty: controlsRef.current.target.y, tz: controlsRef.current.target.z,
+      }
+      const end = { px: dest.x, py: dest.y, pz: dest.z, tx: target.x * 0.98, ty: target.y * 0.98, tz: target.z * 0.98 }
+      const t0 = performance.now()
+
+      const animate = (now) => {
+        const k = Math.min(1, (now - t0) / 1200)
+        const ease = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2
+        camera.position.set(
+          start.px + (end.px - start.px) * ease,
+          start.py + (end.py - start.py) * ease,
+          start.pz + (end.pz - start.pz) * ease,
+        )
+        controlsRef.current.target.set(
+          start.tx + (end.tx - start.tx) * ease,
+          start.ty + (end.ty - start.ty) * ease,
+          start.tz + (end.tz - start.tz) * ease,
+        )
+        controlsRef.current.update()
+        if (k < 1) requestAnimationFrame(animate)
+      }
+      requestAnimationFrame(animate)
+    }
+  }))
+
+  const lines = useMemo(() => {
+    const sp = hubs.find(h => h.id === 'saopaulo')
+    return hubs.filter(h => h.id !== 'saopaulo').map(h => ({ from: sp, to: h }))
+  }, [hubs])
+
+  const maxVol = useMemo(() => Math.max(1, ...hubs.map(h => h.volume24h || 0)), [hubs])
+
   return (
     <Canvas camera={{ position: [0, 0, 2.1], fov: 50 }} className="absolute inset-0">
       <ambientLight intensity={0.6} />
       <directionalLight position={[2, 2, 2]} intensity={0.8} />
 
-      {/* Sphere */}
+      {/* Earth sphere with country texture */}
       <mesh>
-        <sphereGeometry args={[1, 64, 64]} />
-        <meshStandardMaterial color="#0a0a0a" emissive="#0b0b0b" metalness={0.2} roughness={0.85} />
+        <sphereGeometry args={[1, 128, 128]} />
+        <meshStandardMaterial
+          map={earthMap}
+          metalness={0.2}
+          roughness={0.9}
+          emissive={'#0a0a0a'}
+          emissiveIntensity={0.2}
+        />
       </mesh>
 
       {/* Subtle latitude/longitude grid lines */}
       <mesh>
-        <sphereGeometry args={[1.001, 64, 64]} />
+        <sphereGeometry args={[1.001, 48, 48]} />
         <meshBasicMaterial color="white" wireframe transparent opacity={0.06} />
       </mesh>
 
-      {/* Hubs */}
+      {/* Hubs glow + pulses */}
       {hubs.map((h) => {
-        const [x, y, z] = latLonToXYZ(h.lat, h.lon, 1.01)
-        const strength = h.volume24h ? Math.min(1, h.volume24h / Math.max(1, Math.max(...hubs.map(x => x.volume24h || 1)))) : 0.2
+        const pos = latLonToXYZ(h.lat, h.lon, 1.01)
+        const strength = h.volume24h ? Math.min(1, (h.volume24h || 0) / (maxVol || 1)) : 0.2
         return (
-          <group key={h.id} position={[x, y, z]} onClick={() => onSelect(h.id)}>
+          <group key={h.id} position={pos} onClick={() => onSelect(h.id)}>
             <GlowPoint position={[0, 0, 0]} strength={strength} />
+            <HubPulse position={[0, 0, 0]} intensity={strength} />
           </group>
         )
       })}
 
-      <OrbitControls enablePan={false} minDistance={1.6} maxDistance={3.4} rotateSpeed={0.6} zoomSpeed={0.6} />
+      {/* 3D arcs with animated particles */}
+      {lines.map(({ from, to }) => {
+        const a = latLonToXYZ(from.lat, from.lon, 1.02)
+        const b = latLonToXYZ(to.lat, to.lon, 1.02)
+        const s = Math.min(1, ((to.volume24h || 0) + (from.volume24h || 0)) / (2 * maxVol))
+        return <ArcTube key={`${from.id}-${to.id}`} from={a} to={b} strength={s} />
+      })}
+
+      <OrbitControls ref={controlsRef} enablePan={false} minDistance={1.6} maxDistance={3.4} rotateSpeed={0.6} zoomSpeed={0.6} />
     </Canvas>
   )
-}
+})
 
 export default function NetworkMap() {
   const [hubs, setHubs] = useState(
@@ -170,6 +307,12 @@ export default function NetworkMap() {
     dragRef.current.dragging = false
   }
 
+  // 3D focus control
+  const globeRef = useRef()
+  const handleFocusBrazil = () => {
+    if (globeRef.current?.focusBrazil) globeRef.current.focusBrazil()
+  }
+
   return (
     <section className="relative z-10 bg-black py-16 text-white">
       <div className="absolute inset-0 -z-10 bg-[radial-gradient(60%_40%_at_100%_0%,rgba(255,85,0,0.06),transparent_60%)]" />
@@ -182,6 +325,9 @@ export default function NetworkMap() {
           <div className="flex items-center gap-2">
             <button onClick={() => setMode('2d')} className={`rounded-xl px-3 py-2 text-sm border ${mode==='2d'?'border-[#FF7733] bg-[#FF7733]/10 text-white':'border-white/15 text-white/70 hover:text-white hover:bg-white/5'}`}>Visão 2D</button>
             <button onClick={() => setMode('3d')} className={`rounded-xl px-3 py-2 text-sm border ${mode==='3d'?'border-[#FF7733] bg-[#FF7733]/10 text-white':'border-white/15 text-white/70 hover:text-white hover:bg-white/5'}`}>Globo 3D</button>
+            {mode === '3d' && (
+              <button onClick={handleFocusBrazil} className="rounded-xl px-3 py-2 text-sm border border-[#FF7733] bg-[#FF7733]/10 text-white">Foco Brasil</button>
+            )}
           </div>
         </div>
 
@@ -228,7 +374,7 @@ export default function NetworkMap() {
                     )
                   })}
 
-                  {/* heatmap spots based on volume */}
+                  {/* heatmap spots based on volume with subtle pulse */}
                   {hubs.map((h) => {
                     const x = h.pos.x * 1000
                     const y = h.pos.y * 562
@@ -241,7 +387,10 @@ export default function NetworkMap() {
                           <stop offset="0%" stopColor={`rgba(255,119,51,${0.45 * opacity})`} />
                           <stop offset="100%" stopColor="rgba(255,119,51,0)" />
                         </radialGradient>
-                        <circle cx={x} cy={y} r={r} fill={`url(#g-${h.id})`} />
+                        <circle cx={x} cy={y} r={r} fill={`url(#g-${h.id})`}>
+                          <animate attributeName="r" values={`${r};${r*1.2};${r}`} dur="3s" repeatCount="indefinite" />
+                          <animate attributeName="opacity" values={`${opacity};${opacity*1.2};${opacity}`} dur="3s" repeatCount="indefinite" />
+                        </circle>
                       </g>
                     )
                   })}
@@ -287,7 +436,7 @@ export default function NetworkMap() {
               </svg>
             </div>
           ) : (
-            <Globe3D hubs={hubs} onSelect={setActiveId} />
+            <Globe3D ref={globeRef} hubs={hubs} onSelect={setActiveId} />
           )}
 
           {/* side panel */}
