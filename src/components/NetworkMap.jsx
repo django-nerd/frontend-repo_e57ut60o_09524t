@@ -116,12 +116,12 @@ function ArcParticle({ curve, strength = 1 }) {
   )
 }
 
-const Globe3D = forwardRef(function Globe3D({ hubs, onSelect }, ref) {
+const GlobeScene = forwardRef(function GlobeScene({ hubs, onSelect }, ref) {
   const earthMap = useTexture('https://raw.githubusercontent.com/pmndrs/drei-assets/master/textures/earth-dark.jpg')
   const { camera } = useThree()
   const controlsRef = useRef()
 
-  // Expose focusBrazil method
+  // Expose focusBrazil method from inside Canvas context
   useImperativeHandle(ref, () => ({
     focusBrazil: () => {
       const [x, y, z] = latLonToXYZ(-14.235, -51.9253, 1.01) // Brazil center-ish
@@ -130,7 +130,6 @@ const Globe3D = forwardRef(function Globe3D({ hubs, onSelect }, ref) {
       const dist = 2.0
       const dest = dir.multiplyScalar(dist)
 
-      // Smooth animation
       const start = {
         px: camera.position.x, py: camera.position.y, pz: camera.position.z,
         tx: controlsRef.current.target.x, ty: controlsRef.current.target.y, tz: controlsRef.current.target.z,
@@ -166,7 +165,7 @@ const Globe3D = forwardRef(function Globe3D({ hubs, onSelect }, ref) {
   const maxVol = useMemo(() => Math.max(1, ...hubs.map(h => h.volume24h || 0)), [hubs])
 
   return (
-    <Canvas camera={{ position: [0, 0, 2.1], fov: 50 }} className="absolute inset-0">
+    <>
       <ambientLight intensity={0.6} />
       <directionalLight position={[2, 2, 2]} intensity={0.8} />
 
@@ -209,6 +208,14 @@ const Globe3D = forwardRef(function Globe3D({ hubs, onSelect }, ref) {
       })}
 
       <OrbitControls ref={controlsRef} enablePan={false} minDistance={1.6} maxDistance={3.4} rotateSpeed={0.6} zoomSpeed={0.6} />
+    </>
+  )
+})
+
+const Globe3D = forwardRef(function Globe3D({ hubs, onSelect }, ref) {
+  return (
+    <Canvas camera={{ position: [0, 0, 2.1], fov: 50 }} className="absolute inset-0">
+      <GlobeScene ref={ref} hubs={hubs} onSelect={onSelect} />
     </Canvas>
   )
 })
